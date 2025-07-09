@@ -1111,7 +1111,8 @@ class NeuralNetworkAnimation {
             { name: 'Default', file: 'Default.json' },
             { name: 'Calm Ocean', file: 'Calm Ocean.json' },
             { name: 'Electric Storm', file: 'Electric Storm.json' },
-            { name: 'Dark Magic', file: 'Dark Magic.json' }
+            { name: 'Dark Magic', file: 'Dark Magic.json' },
+            { name: 'Bright Night', file: 'Bright Night.json' }
         ];
         // Load presets dynamically
         this.loadAvailablePresets(dropdown, defaultPresets);
@@ -1123,7 +1124,8 @@ class NeuralNetworkAnimation {
                     { name: 'Default', file: 'Default.json' },
                     { name: 'Calm Ocean', file: 'Calm Ocean.json' },
                     { name: 'Electric Storm', file: 'Electric Storm.json' },
-                    { name: 'Dark Magic', file: 'Dark Magic.json' }
+                    { name: 'Dark Magic', file: 'Dark Magic.json' },
+                    { name: 'Bright Night', file: 'Bright Night.json' }
                 ];
                 this.loadAvailablePresets(dropdown, defaultPresets);
                 dropdown.value = ''; // Reset selection
