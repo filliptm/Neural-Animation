@@ -1467,10 +1467,8 @@ class NeuralNetworkAnimation {
         this.updateRippleColors();
         this.updateRippleVisibility();
         this.updateControlPanel();
-        // Check if node count changed significantly, recreate if needed
-        if (Math.abs(this.nodeCount - this.nodes.length) > 0) {
-            this.recreateNodes();
-        }
+        // Handle node count changes smoothly during transition
+        this.updateNodeCount();
         // End transition
         if (progress >= 1) {
             this.isTransitioning = false;
@@ -1479,6 +1477,131 @@ class NeuralNetworkAnimation {
             this.toPreset = null;
             console.log('Transition completed');
         }
+    }
+    updateNodeCount() {
+        const targetCount = this.nodeCount;
+        const currentCount = this.nodes.length;
+        if (targetCount > currentCount) {
+            // Add nodes gradually
+            this.addNode();
+        }
+        else if (targetCount < currentCount) {
+            // Remove nodes gradually
+            this.removeNode();
+        }
+        // Update connections after node count changes
+        if (targetCount !== currentCount) {
+            this.updateConnections();
+        }
+    }
+    addNode() {
+        const geometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+        // Calculate camera frustum dimensions
+        const depth = 20;
+        const fov = this.camera.fov * Math.PI / 180;
+        const aspect = this.camera.aspect;
+        const height = 2 * Math.tan(fov / 2) * depth;
+        const width = height * aspect;
+        // Find a good position that's not too close to existing nodes
+        let position;
+        let attempts = 0;
+        const maxAttempts = 50;
+        const minDistance = Math.min(width, height, depth * 0.8) / Math.sqrt(this.nodeCount) * 0.6;
+        do {
+            position = new THREE.Vector3((Math.random() - 0.5) * width, (Math.random() - 0.5) * height, (Math.random() - 0.5) * depth * 0.8);
+            attempts++;
+        } while (attempts < maxAttempts && this.isTooCloseToExistingNodes(position, minDistance));
+        // Create node material with current node color
+        const baseColor = new THREE.Color(this.nodeColor);
+        const material = new THREE.MeshLambertMaterial({ color: baseColor });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(position);
+        // Start small and scale up for smooth appearance
+        mesh.scale.setScalar(0.1);
+        const nodeData = {
+            mesh,
+            position: position.clone(),
+            velocity: new THREE.Vector3((Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.3, (Math.random() - 0.5) * 0.2),
+            targetPosition: position.clone(),
+            connections: [],
+            activity: Math.random(),
+            baseColor: baseColor.clone(),
+            mass: 1.0 + Math.random() * 0.5,
+            restitution: 0.6 + Math.random() * 0.3,
+            friction: 0.9 + Math.random() * 0.1,
+            angularVelocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02),
+            lastCollisionTime: 0
+        };
+        this.nodes.push(nodeData);
+        this.scene.add(mesh);
+        // Animate scale up
+        this.animateNodeScaleUp(mesh);
+    }
+    removeNode() {
+        if (this.nodes.length === 0)
+            return;
+        // Remove the last node (could be made smarter to remove least active node)
+        const nodeToRemove = this.nodes.pop();
+        if (!nodeToRemove)
+            return;
+        // Animate scale down before removal
+        this.animateNodeScaleDown(nodeToRemove.mesh, () => {
+            // Remove from scene and dispose resources
+            this.scene.remove(nodeToRemove.mesh);
+            nodeToRemove.mesh.geometry.dispose();
+            nodeToRemove.mesh.material.dispose();
+        });
+    }
+    isTooCloseToExistingNodes(position, minDistance) {
+        for (const node of this.nodes) {
+            if (position.distanceTo(node.position) < minDistance) {
+                return true;
+            }
+        }
+        return false;
+    }
+    animateNodeScaleUp(mesh) {
+        const startTime = performance.now();
+        const duration = 500; // 0.5 seconds
+        const animate = () => {
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easeOut = 1 - Math.pow(1 - progress, 3);
+            mesh.scale.setScalar(0.1 + (1 - 0.1) * easeOut);
+            if (progress < 1) {
+                requestAnimationFrame(animate);
+            }
+        };
+        animate();
+    }
+    animateNodeScaleDown(mesh, onComplete) {
+        const startTime = performance.now();
+        const duration = 300; // 0.3 seconds
+        const startScale = mesh.scale.x;
+        // Mark the mesh for removal to prevent it from being updated
+        mesh.isBeingRemoved = true;
+        const animate = () => {
+            const elapsed = performance.now() - startTime;
+            const progress = Math.min(elapsed / duration, 1);
+            const easeIn = progress * progress * progress;
+            // Ensure mesh still exists before scaling
+            if (mesh.parent) {
+                mesh.scale.setScalar(startScale * (1 - easeIn));
+            }
+            if (progress >= 1) {
+                // Ensure cleanup happens
+                try {
+                    onComplete();
+                }
+                catch (error) {
+                    console.error('Error during node removal:', error);
+                }
+            }
+            else {
+                requestAnimationFrame(animate);
+            }
+        };
+        animate();
     }
     recreateNodes() {
         // Clear existing nodes
@@ -1522,6 +1645,9 @@ class NeuralNetworkAnimation {
         this.raycaster.setFromCamera(this.mouse, this.camera);
         this.nodes.forEach((node, index) => {
             const { mesh, position, velocity, targetPosition, baseColor, mass, restitution, friction, angularVelocity } = node;
+            // Skip nodes that are being removed
+            if (mesh.isBeingRemoved)
+                return;
             // Update activity (neural firing simulation)
             node.activity = (Math.sin(time * this.activitySpeed + index) + 1) * 0.5;
             // Apply velocity to position (constant speed movement)
