@@ -1,0 +1,22 @@
+{
+  "name": "fluttering-tiles-animation",
+  "version": "1.0.0",
+  "description": "Three.js fluttering scale tiles animation",
+  "main": "index.js",
+  "type": "module",
+  "scripts": {
+    "build": "tsc",
+    "dev": "concurrently \"tsc --watch\" \"python -m http.server 8000\"",
+    "watch": "tsc --watch",
+    "serve": "python -m http.server 8000"
+  },
+  "devDependencies": {
+    "@types/three": "^0.160.0",
+    "chokidar": "^4.0.3",
+    "concurrently": "^9.2.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "three": "^0.160.0"
+  }
+}

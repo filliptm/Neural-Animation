@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fluttering Scale Tiles Animation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            overflow: hidden;
+            background: #1a1a2e;
+            font-family: Arial, sans-serif;
+        }
+        
+        canvas {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <script type="importmap">
+    {
+        "imports": {
+            "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+        }
+    }
+    </script>
+    <script>
+        // Simple auto-refresh for development
+        if (location.hostname === 'localhost' || location.hostname === '127.0.0.1') {
+            let lastModified = 0;
+            
+            setInterval(async () => {
+                try {
+                    const response = await fetch('./index.js', { method: 'HEAD' });
+                    const modified = new Date(response.headers.get('Last-Modified')).getTime();
+                    
+                    if (lastModified && modified > lastModified) {
+                        console.log('🔄 File changed, reloading...');
+                        location.reload();
+                    }
+                    
+                    lastModified = modified;
+                } catch (e) {
+                    // Ignore errors
+                }
+            }, 1000);
+            
+            console.log('🔥 Auto-refresh enabled');
+        }
+    </script>
+    <script type="module" src="./index.js"></script>
+</body>
+</html>
