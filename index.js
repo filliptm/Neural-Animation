@@ -37,6 +37,13 @@ class NeuralNetworkAnimation {
         this.wallFriction = 0.95;
         this.availablePresets = [];
         this.currentPresetName = 'Default';
+        // Transition system
+        this.isTransitioning = false;
+        this.transitionStartTime = 0;
+        this.transitionDuration = 2.0;
+        this.transitionEasing = 'ease-in-out';
+        this.fromPreset = null;
+        this.toPreset = null;
         // Time tracking
         this.clock = new THREE.Clock();
         this.init();
@@ -1122,11 +1129,87 @@ class NeuralNetworkAnimation {
                 dropdown.value = ''; // Reset selection
             }
             else if (dropdown.value) {
-                this.loadPresetFromPath(`./presets/${dropdown.value}`);
+                // Load preset with transition
+                fetch(`./presets/${dropdown.value}`)
+                    .then(response => response.json())
+                    .then((preset) => {
+                    this.startTransition(preset);
+                })
+                    .catch(error => {
+                    console.error('Error loading preset for transition:', error);
+                    // Fallback to instant loading
+                    this.loadPresetFromPath(`./presets/${dropdown.value}`);
+                });
             }
         });
         dropdownContainer.appendChild(dropdown);
         presetPanel.appendChild(dropdownContainer);
+        // Transition controls
+        const transitionSection = document.createElement('div');
+        transitionSection.style.cssText = 'margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid rgba(255, 255, 255, 0.1);';
+        const transitionTitle = document.createElement('div');
+        transitionTitle.textContent = 'Transition';
+        transitionTitle.style.cssText = 'color: #4fc3f7; font-size: 12px; margin-bottom: 8px; font-weight: bold;';
+        transitionSection.appendChild(transitionTitle);
+        // Duration slider
+        const durationContainer = document.createElement('div');
+        durationContainer.style.cssText = 'margin-bottom: 5px;';
+        const durationLabel = document.createElement('div');
+        durationLabel.style.cssText = 'display: flex; justify-content: space-between; font-size: 11px; color: #ccc;';
+        durationLabel.innerHTML = `<span>Duration</span><span id="duration-value">${this.transitionDuration.toFixed(1)}s</span>`;
+        const durationSlider = document.createElement('input');
+        durationSlider.type = 'range';
+        durationSlider.min = '0.5';
+        durationSlider.max = '10';
+        durationSlider.step = '0.1';
+        durationSlider.value = this.transitionDuration.toString();
+        durationSlider.style.cssText = 'width: 100%; height: 3px; background: #333; outline: none; border-radius: 2px;';
+        durationSlider.addEventListener('input', () => {
+            this.transitionDuration = parseFloat(durationSlider.value);
+            document.getElementById('duration-value').textContent = `${this.transitionDuration.toFixed(1)}s`;
+        });
+        durationContainer.appendChild(durationLabel);
+        durationContainer.appendChild(durationSlider);
+        transitionSection.appendChild(durationContainer);
+        // Easing dropdown
+        const easingContainer = document.createElement('div');
+        easingContainer.style.cssText = 'margin-bottom: 5px;';
+        const easingLabel = document.createElement('div');
+        easingLabel.textContent = 'Easing';
+        easingLabel.style.cssText = 'font-size: 11px; color: #ccc; margin-bottom: 3px;';
+        const easingSelect = document.createElement('select');
+        easingSelect.style.cssText = `
+      width: 100%;
+      padding: 4px;
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 3px;
+      font-size: 11px;
+    `;
+        const easingOptions = [
+            { value: 'linear', text: 'Linear' },
+            { value: 'ease-in', text: 'Ease In' },
+            { value: 'ease-out', text: 'Ease Out' },
+            { value: 'ease-in-out', text: 'Ease In-Out' },
+            { value: 'bounce', text: 'Bounce' },
+            { value: 'elastic', text: 'Elastic' }
+        ];
+        easingOptions.forEach(option => {
+            const opt = document.createElement('option');
+            opt.value = option.value;
+            opt.textContent = option.text;
+            if (option.value === this.transitionEasing)
+                opt.selected = true;
+            easingSelect.appendChild(opt);
+        });
+        easingSelect.addEventListener('change', () => {
+            this.transitionEasing = easingSelect.value;
+        });
+        easingContainer.appendChild(easingLabel);
+        easingContainer.appendChild(easingSelect);
+        transitionSection.appendChild(easingContainer);
+        presetPanel.appendChild(transitionSection);
         // Save preset section
         const saveContainer = document.createElement('div');
         saveContainer.style.cssText = 'margin-bottom: 10px;';
@@ -1280,6 +1363,122 @@ class NeuralNetworkAnimation {
         refreshOption.textContent = '🔄 Refresh Presets';
         refreshOption.style.fontStyle = 'italic';
         dropdown.appendChild(refreshOption);
+    }
+    getEasingFunction(type) {
+        switch (type) {
+            case 'linear':
+                return (t) => t;
+            case 'ease-in':
+                return (t) => t * t * t;
+            case 'ease-out':
+                return (t) => 1 - Math.pow(1 - t, 3);
+            case 'ease-in-out':
+                return (t) => t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2;
+            case 'bounce':
+                return (t) => {
+                    const n1 = 7.5625;
+                    const d1 = 2.75;
+                    if (t < 1 / d1) {
+                        return n1 * t * t;
+                    }
+                    else if (t < 2 / d1) {
+                        return n1 * (t -= 1.5 / d1) * t + 0.75;
+                    }
+                    else if (t < 2.5 / d1) {
+                        return n1 * (t -= 2.25 / d1) * t + 0.9375;
+                    }
+                    else {
+                        return n1 * (t -= 2.625 / d1) * t + 0.984375;
+                    }
+                };
+            case 'elastic':
+                return (t) => {
+                    const c4 = (2 * Math.PI) / 3;
+                    return t === 0 ? 0 : t === 1 ? 1 : -Math.pow(2, 10 * t - 10) * Math.sin((t * 10 - 10.75) * c4);
+                };
+            default:
+                return (t) => t;
+        }
+    }
+    lerp(start, end, t) {
+        return start + (end - start) * t;
+    }
+    lerpColor(startColor, endColor, t) {
+        const start = new THREE.Color(startColor);
+        const end = new THREE.Color(endColor);
+        const result = start.clone().lerp(end, t);
+        return `#${result.getHexString()}`;
+    }
+    startTransition(toPreset) {
+        if (this.isTransitioning)
+            return;
+        this.fromPreset = this.getCurrentPreset();
+        this.toPreset = toPreset;
+        this.isTransitioning = true;
+        this.transitionStartTime = performance.now();
+        console.log(`Starting transition from "${this.fromPreset.name}" to "${toPreset.name}" (${this.transitionDuration}s, ${this.transitionEasing})`);
+    }
+    updateTransition() {
+        if (!this.isTransitioning || !this.fromPreset || !this.toPreset)
+            return;
+        const elapsed = (performance.now() - this.transitionStartTime) / 1000;
+        const progress = Math.min(elapsed / this.transitionDuration, 1);
+        const easingFunc = this.getEasingFunction(this.transitionEasing);
+        const t = easingFunc(progress);
+        // Interpolate all numeric values
+        this.nodeCount = Math.round(this.lerp(this.fromPreset.nodeCount, this.toPreset.nodeCount, t));
+        this.nodeSpeed = this.lerp(this.fromPreset.nodeSpeed, this.toPreset.nodeSpeed, t);
+        this.activitySpeed = this.lerp(this.fromPreset.activitySpeed, this.toPreset.activitySpeed, t);
+        this.connectionOpacity = this.lerp(this.fromPreset.connectionOpacity, this.toPreset.connectionOpacity, t);
+        this.spaceSize = this.lerp(this.fromPreset.spaceSize, this.toPreset.spaceSize, t);
+        this.mouseInfluenceRadius = this.lerp(this.fromPreset.mouseInfluenceRadius, this.toPreset.mouseInfluenceRadius, t);
+        this.particleCount = Math.round(this.lerp(this.fromPreset.particleCount, this.toPreset.particleCount, t));
+        this.particleSpeed = this.lerp(this.fromPreset.particleSpeed, this.toPreset.particleSpeed, t);
+        this.particleSize = this.lerp(this.fromPreset.particleSize, this.toPreset.particleSize, t);
+        this.rippleIntensity = this.lerp(this.fromPreset.rippleIntensity, this.toPreset.rippleIntensity, t);
+        this.rippleDuration = this.lerp(this.fromPreset.rippleDuration, this.toPreset.rippleDuration, t);
+        this.rippleSize = this.lerp(this.fromPreset.rippleSize, this.toPreset.rippleSize, t);
+        this.wallRestitution = this.lerp(this.fromPreset.wallRestitution, this.toPreset.wallRestitution, t);
+        this.wallFriction = this.lerp(this.fromPreset.wallFriction, this.toPreset.wallFriction, t);
+        // Interpolate colors
+        this.backgroundColor = this.lerpColor(this.fromPreset.backgroundColor, this.toPreset.backgroundColor, t);
+        this.nodeColor = this.lerpColor(this.fromPreset.nodeColor, this.toPreset.nodeColor, t);
+        this.connectionColor = this.lerpColor(this.fromPreset.connectionColor, this.toPreset.connectionColor, t);
+        this.particleColor = this.lerpColor(this.fromPreset.particleColor, this.toPreset.particleColor, t);
+        this.rippleColor = this.lerpColor(this.fromPreset.rippleColor, this.toPreset.rippleColor, t);
+        // Handle boolean values (switch at 50% progress)
+        if (t >= 0.5) {
+            this.showAllConnections = this.toPreset.showAllConnections;
+            this.showParticles = this.toPreset.showParticles;
+            this.showRipples = this.toPreset.showRipples;
+        }
+        else {
+            this.showAllConnections = this.fromPreset.showAllConnections;
+            this.showParticles = this.fromPreset.showParticles;
+            this.showRipples = this.fromPreset.showRipples;
+        }
+        // Update visual elements
+        this.scene.background = new THREE.Color(this.backgroundColor);
+        this.updateNodeColors();
+        this.updateConnectionColors();
+        this.updateParticleColors();
+        this.updateParticleSize();
+        this.updateParticleVisibility();
+        this.updateRippleColors();
+        this.updateRippleVisibility();
+        this.updateControlPanel();
+        // Check if node count changed significantly, recreate if needed
+        if (Math.abs(this.nodeCount - this.nodes.length) > 0) {
+            this.recreateNodes();
+        }
+        // End transition
+        if (progress >= 1) {
+            this.isTransitioning = false;
+            this.currentPresetName = this.toPreset.name;
+            this.fromPreset = null;
+            this.toPreset = null;
+            console.log('Transition completed');
+        }
     }
     recreateNodes() {
         // Clear existing nodes
@@ -1507,6 +1706,7 @@ class NeuralNetworkAnimation {
     }
     animate() {
         requestAnimationFrame(() => this.animate());
+        this.updateTransition();
         this.updateNodes();
         this.updateParticles();
         this.updateRipples();
