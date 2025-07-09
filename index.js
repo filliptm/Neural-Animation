@@ -31,6 +31,10 @@ class NeuralNetworkAnimation {
         this.rippleSize = 1.0;
         this.rippleColor = '#ffffff';
         this.showRipples = true;
+        this.gravity = 0.0;
+        this.airResistance = 0.98;
+        this.wallRestitution = 0.7;
+        this.wallFriction = 0.95;
         // Time tracking
         this.clock = new THREE.Clock();
         this.init();
@@ -304,6 +308,9 @@ class NeuralNetworkAnimation {
         controls.rippleIntensity = createSlider('Ripple Intensity', 0, 2, 0.1, this.rippleIntensity, (val) => this.rippleIntensity = val);
         controls.rippleDuration = createSlider('Ripple Duration', 0.5, 5, 0.1, this.rippleDuration, (val) => this.rippleDuration = val);
         controls.rippleSize = createSlider('Ripple Size', 0.2, 3, 0.1, this.rippleSize, (val) => this.rippleSize = val);
+        // Physics controls
+        controls.wallRestitution = createSlider('Wall Bounce', 0.1, 1.0, 0.05, this.wallRestitution, (val) => this.wallRestitution = val);
+        controls.wallFriction = createSlider('Wall Friction', 0.8, 1.0, 0.01, this.wallFriction, (val) => this.wallFriction = val);
         // Color controls
         const nodeColorPicker = createColorPicker('Node Color', this.nodeColor, (val) => {
             this.nodeColor = val;
@@ -411,6 +418,8 @@ class NeuralNetworkAnimation {
             this.rippleSize = 1.0;
             this.rippleColor = '#ffffff';
             this.showRipples = true;
+            this.wallRestitution = 0.7;
+            this.wallFriction = 0.95;
             // Update all controls
             controls.nodeCount.value = this.nodeCount.toString();
             controls.nodeSpeed.value = this.nodeSpeed.toString();
@@ -424,6 +433,8 @@ class NeuralNetworkAnimation {
             controls.rippleIntensity.value = this.rippleIntensity.toString();
             controls.rippleDuration.value = this.rippleDuration.toString();
             controls.rippleSize.value = this.rippleSize.toString();
+            controls.wallRestitution.value = this.wallRestitution.toString();
+            controls.wallFriction.value = this.wallFriction.toString();
             toggle.checked = this.showAllConnections;
             particleToggle.checked = this.showParticles;
             rippleToggle.checked = this.showRipples;
@@ -434,7 +445,7 @@ class NeuralNetworkAnimation {
             rippleColorPicker.value = this.rippleColor;
             // Update displays
             panel.querySelectorAll('span').forEach((span, index) => {
-                const values = [this.nodeCount, this.nodeSpeed, this.activitySpeed, this.connectionOpacity, this.spaceSize, this.mouseInfluenceRadius, this.particleCount, this.particleSpeed, this.particleSize, this.rippleIntensity, this.rippleDuration, this.rippleSize];
+                const values = [this.nodeCount, this.nodeSpeed, this.activitySpeed, this.connectionOpacity, this.spaceSize, this.mouseInfluenceRadius, this.particleCount, this.particleSpeed, this.particleSize, this.rippleIntensity, this.rippleDuration, this.rippleSize, this.wallRestitution, this.wallFriction];
                 if (index < values.length) {
                     span.textContent = values[index].toFixed(2);
                 }
@@ -501,7 +512,12 @@ class NeuralNetworkAnimation {
                 targetPosition: position.clone(),
                 connections: [],
                 activity: Math.random(),
-                baseColor: baseColor.clone()
+                baseColor: baseColor.clone(),
+                mass: 1.0 + Math.random() * 0.5, // Random mass between 1.0 and 1.5
+                restitution: 0.6 + Math.random() * 0.3, // Random bounciness between 0.6 and 0.9
+                friction: 0.9 + Math.random() * 0.1, // Random friction between 0.9 and 1.0
+                angularVelocity: new THREE.Vector3((Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02, (Math.random() - 0.5) * 0.02),
+                lastCollisionTime: 0
             };
             this.nodes.push(nodeData);
             this.scene.add(mesh);
@@ -843,13 +859,14 @@ class NeuralNetworkAnimation {
     }
     updateNodes() {
         const time = this.clock.getElapsedTime();
+        const deltaTime = 1 / 60; // Fixed 60 FPS delta time for consistent behavior
         // Update raycaster for mouse interaction
         this.raycaster.setFromCamera(this.mouse, this.camera);
         this.nodes.forEach((node, index) => {
-            const { mesh, position, velocity, targetPosition, baseColor } = node;
+            const { mesh, position, velocity, targetPosition, baseColor, mass, restitution, friction, angularVelocity } = node;
             // Update activity (neural firing simulation)
             node.activity = (Math.sin(time * this.activitySpeed + index) + 1) * 0.5;
-            // Bouncing movement - apply velocity directly without damping
+            // Apply velocity to position (constant speed movement)
             position.add(velocity.clone().multiplyScalar(this.nodeSpeed));
             // Boundary constraints based on camera frustum - proper bouncing
             const depth = 20;
@@ -860,11 +877,21 @@ class NeuralNetworkAnimation {
             const boundaryX = width * 0.5;
             const boundaryY = height * 0.5;
             const boundaryZ = depth * 0.4;
-            // Bounce off boundaries and create ripples
+            // Enhanced collision detection with realistic physics
+            let collisionOccurred = false;
+            const minTimeBetweenCollisions = 0.1; // Prevent multiple collisions in quick succession
+            // X-axis collisions (left/right walls)
             if (position.x > boundaryX) {
                 position.x = boundaryX;
-                if (velocity.x > 0) { // Only create ripple if actually hitting the wall
-                    velocity.x = -Math.abs(velocity.x);
+                if (velocity.x > 0 && (time - node.lastCollisionTime) > minTimeBetweenCollisions) {
+                    const impactSpeed = Math.abs(velocity.x);
+                    velocity.x = -velocity.x * (node.restitution * this.wallRestitution);
+                    velocity.y *= this.wallFriction;
+                    velocity.z *= this.wallFriction;
+                    // Add some random angular velocity from impact
+                    angularVelocity.add(new THREE.Vector3((Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1));
+                    node.lastCollisionTime = time;
+                    collisionOccurred = true;
                     if (this.showRipples) {
                         const ripplePos = new THREE.Vector3(boundaryX, position.y, position.z);
                         const normal = new THREE.Vector3(-1, 0, 0);
@@ -874,8 +901,14 @@ class NeuralNetworkAnimation {
             }
             else if (position.x < -boundaryX) {
                 position.x = -boundaryX;
-                if (velocity.x < 0) { // Only create ripple if actually hitting the wall
-                    velocity.x = Math.abs(velocity.x);
+                if (velocity.x < 0 && (time - node.lastCollisionTime) > minTimeBetweenCollisions) {
+                    const impactSpeed = Math.abs(velocity.x);
+                    velocity.x = -velocity.x * (node.restitution * this.wallRestitution);
+                    velocity.y *= this.wallFriction;
+                    velocity.z *= this.wallFriction;
+                    angularVelocity.add(new THREE.Vector3((Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1));
+                    node.lastCollisionTime = time;
+                    collisionOccurred = true;
                     if (this.showRipples) {
                         const ripplePos = new THREE.Vector3(-boundaryX, position.y, position.z);
                         const normal = new THREE.Vector3(1, 0, 0);
@@ -883,10 +916,17 @@ class NeuralNetworkAnimation {
                     }
                 }
             }
+            // Y-axis collisions (floor/ceiling)
             if (position.y > boundaryY) {
                 position.y = boundaryY;
-                if (velocity.y > 0) { // Only create ripple if actually hitting the wall
-                    velocity.y = -Math.abs(velocity.y);
+                if (velocity.y > 0 && (time - node.lastCollisionTime) > minTimeBetweenCollisions) {
+                    const impactSpeed = Math.abs(velocity.y);
+                    velocity.y = -velocity.y * (node.restitution * this.wallRestitution);
+                    velocity.x *= this.wallFriction;
+                    velocity.z *= this.wallFriction;
+                    angularVelocity.add(new THREE.Vector3((Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1));
+                    node.lastCollisionTime = time;
+                    collisionOccurred = true;
                     if (this.showRipples) {
                         const ripplePos = new THREE.Vector3(position.x, boundaryY, position.z);
                         const normal = new THREE.Vector3(0, -1, 0);
@@ -896,8 +936,14 @@ class NeuralNetworkAnimation {
             }
             else if (position.y < -boundaryY) {
                 position.y = -boundaryY;
-                if (velocity.y < 0) { // Only create ripple if actually hitting the wall
-                    velocity.y = Math.abs(velocity.y);
+                if (velocity.y < 0 && (time - node.lastCollisionTime) > minTimeBetweenCollisions) {
+                    const impactSpeed = Math.abs(velocity.y);
+                    velocity.y = -velocity.y * (node.restitution * this.wallRestitution);
+                    velocity.x *= this.wallFriction;
+                    velocity.z *= this.wallFriction;
+                    angularVelocity.add(new THREE.Vector3((Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1));
+                    node.lastCollisionTime = time;
+                    collisionOccurred = true;
                     if (this.showRipples) {
                         const ripplePos = new THREE.Vector3(position.x, -boundaryY, position.z);
                         const normal = new THREE.Vector3(0, 1, 0);
@@ -905,17 +951,30 @@ class NeuralNetworkAnimation {
                     }
                 }
             }
+            // Z-axis collisions (front/back walls)
             if (position.z > boundaryZ) {
                 position.z = boundaryZ;
-                if (velocity.z > 0) { // Only create ripple if actually hitting the wall
-                    velocity.z = -Math.abs(velocity.z);
+                if (velocity.z > 0 && (time - node.lastCollisionTime) > minTimeBetweenCollisions) {
+                    const impactSpeed = Math.abs(velocity.z);
+                    velocity.z = -velocity.z * (node.restitution * this.wallRestitution);
+                    velocity.x *= this.wallFriction;
+                    velocity.y *= this.wallFriction;
+                    angularVelocity.add(new THREE.Vector3((Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1));
+                    node.lastCollisionTime = time;
+                    collisionOccurred = true;
                     // No ripple for front wall (camera side)
                 }
             }
             else if (position.z < -boundaryZ) {
                 position.z = -boundaryZ;
-                if (velocity.z < 0) { // Only create ripple if actually hitting the wall
-                    velocity.z = Math.abs(velocity.z);
+                if (velocity.z < 0 && (time - node.lastCollisionTime) > minTimeBetweenCollisions) {
+                    const impactSpeed = Math.abs(velocity.z);
+                    velocity.z = -velocity.z * (node.restitution * this.wallRestitution);
+                    velocity.x *= this.wallFriction;
+                    velocity.y *= this.wallFriction;
+                    angularVelocity.add(new THREE.Vector3((Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1, (Math.random() - 0.5) * impactSpeed * 0.1));
+                    node.lastCollisionTime = time;
+                    collisionOccurred = true;
                     if (this.showRipples) {
                         const ripplePos = new THREE.Vector3(position.x, position.y, -boundaryZ);
                         const normal = new THREE.Vector3(0, 0, 1);
@@ -923,6 +982,8 @@ class NeuralNetworkAnimation {
                     }
                 }
             }
+            // Apply angular velocity damping
+            angularVelocity.multiplyScalar(0.98);
             // Mouse interaction
             const intersects = this.raycaster.intersectObject(mesh);
             let mouseInfluence = 0;
@@ -950,10 +1011,16 @@ class NeuralNetworkAnimation {
             mesh.material.color.copy(color);
             // Update mesh position
             mesh.position.copy(position);
-            // Gentle rotation
-            mesh.rotation.x += 0.01 * this.nodeSpeed;
-            mesh.rotation.y += 0.015 * this.nodeSpeed;
-            mesh.rotation.z += 0.008 * this.nodeSpeed;
+            // Apply angular velocity for realistic rotation
+            mesh.rotation.x += angularVelocity.x;
+            mesh.rotation.y += angularVelocity.y;
+            mesh.rotation.z += angularVelocity.z;
+            // Add gentle base rotation when not colliding
+            if (!collisionOccurred) {
+                mesh.rotation.x += 0.005 * this.nodeSpeed;
+                mesh.rotation.y += 0.008 * this.nodeSpeed;
+                mesh.rotation.z += 0.003 * this.nodeSpeed;
+            }
         });
         // Update connection lines
         this.updateConnectionGeometry();
