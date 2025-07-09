@@ -40,6 +40,32 @@ interface RippleData {
   wallType: string;
 }
 
+interface PresetData {
+  name: string;
+  nodeCount: number;
+  nodeSpeed: number;
+  activitySpeed: number;
+  connectionOpacity: number;
+  spaceSize: number;
+  mouseInfluenceRadius: number;
+  backgroundColor: string;
+  nodeColor: string;
+  connectionColor: string;
+  showAllConnections: boolean;
+  particleCount: number;
+  particleSpeed: number;
+  particleSize: number;
+  particleColor: string;
+  showParticles: boolean;
+  rippleIntensity: number;
+  rippleDuration: number;
+  rippleSize: number;
+  rippleColor: string;
+  showRipples: boolean;
+  wallRestitution: number;
+  wallFriction: number;
+}
+
 class NeuralNetworkAnimation {
   private scene!: THREE.Scene;
   private camera!: THREE.PerspectiveCamera;
@@ -80,6 +106,8 @@ class NeuralNetworkAnimation {
   private airResistance: number = 0.98;
   private wallRestitution: number = 0.7;
   private wallFriction: number = 0.95;
+  private availablePresets: string[] = [];
+  private currentPresetName: string = 'Default';
   
   // Time tracking
   private clock: THREE.Clock = new THREE.Clock();
@@ -626,6 +654,9 @@ class NeuralNetworkAnimation {
     
     document.body.appendChild(panel);
     
+    // Create separate preset panel on the right
+    this.createPresetPanel();
+    
     this.controlPanel = { element: panel, controls };
   }
   
@@ -1050,6 +1081,417 @@ class NeuralNetworkAnimation {
       (particle.mesh.material as THREE.Material).dispose();
     });
     this.particles = [];
+  }
+
+  private getCurrentPreset(): PresetData {
+    return {
+      name: this.currentPresetName,
+      nodeCount: this.nodeCount,
+      nodeSpeed: this.nodeSpeed,
+      activitySpeed: this.activitySpeed,
+      connectionOpacity: this.connectionOpacity,
+      spaceSize: this.spaceSize,
+      mouseInfluenceRadius: this.mouseInfluenceRadius,
+      backgroundColor: this.backgroundColor,
+      nodeColor: this.nodeColor,
+      connectionColor: this.connectionColor,
+      showAllConnections: this.showAllConnections,
+      particleCount: this.particleCount,
+      particleSpeed: this.particleSpeed,
+      particleSize: this.particleSize,
+      particleColor: this.particleColor,
+      showParticles: this.showParticles,
+      rippleIntensity: this.rippleIntensity,
+      rippleDuration: this.rippleDuration,
+      rippleSize: this.rippleSize,
+      rippleColor: this.rippleColor,
+      showRipples: this.showRipples,
+      wallRestitution: this.wallRestitution,
+      wallFriction: this.wallFriction
+    };
+  }
+
+  private applyPreset(preset: PresetData): void {
+    this.currentPresetName = preset.name;
+    this.nodeCount = preset.nodeCount;
+    this.nodeSpeed = preset.nodeSpeed;
+    this.activitySpeed = preset.activitySpeed;
+    this.connectionOpacity = preset.connectionOpacity;
+    this.spaceSize = preset.spaceSize;
+    this.mouseInfluenceRadius = preset.mouseInfluenceRadius;
+    this.backgroundColor = preset.backgroundColor;
+    this.nodeColor = preset.nodeColor;
+    this.connectionColor = preset.connectionColor;
+    this.showAllConnections = preset.showAllConnections;
+    this.particleCount = preset.particleCount;
+    this.particleSpeed = preset.particleSpeed;
+    this.particleSize = preset.particleSize;
+    this.particleColor = preset.particleColor;
+    this.showParticles = preset.showParticles;
+    this.rippleIntensity = preset.rippleIntensity;
+    this.rippleDuration = preset.rippleDuration;
+    this.rippleSize = preset.rippleSize;
+    this.rippleColor = preset.rippleColor;
+    this.showRipples = preset.showRipples;
+    this.wallRestitution = preset.wallRestitution;
+    this.wallFriction = preset.wallFriction;
+
+    // Update visual elements
+    this.scene.background = new THREE.Color(this.backgroundColor);
+    this.updateNodeColors();
+    this.updateConnectionColors();
+    this.updateParticleColors();
+    this.updateParticleVisibility();
+    this.updateRippleColors();
+    this.updateRippleVisibility();
+    this.clearAllParticles();
+    this.clearAllRipples();
+    this.recreateNodes();
+  }
+
+  private savePreset(name: string): void {
+    const preset = this.getCurrentPreset();
+    preset.name = name;
+    
+    const jsonData = JSON.stringify(preset, null, 2);
+    
+    // Create a modal to show the JSON and instructions
+    const modal = document.createElement('div');
+    modal.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      z-index: 10000;
+    `;
+    
+    const content = document.createElement('div');
+    content.style.cssText = `
+      background: #222;
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      max-width: 600px;
+      max-height: 80%;
+      overflow-y: auto;
+      font-family: Arial, sans-serif;
+    `;
+    
+    const title = document.createElement('h3');
+    title.textContent = `Save Preset: ${name}`;
+    title.style.cssText = 'margin: 0 0 15px 0; color: #4fc3f7;';
+    
+    const instructions = document.createElement('p');
+    instructions.innerHTML = `
+      Copy the JSON below and save it as <strong>${name}.json</strong> in the <strong>presets</strong> folder, then refresh the page to see it in the dropdown.
+    `;
+    instructions.style.cssText = 'margin-bottom: 15px; line-height: 1.4;';
+    
+    const textarea = document.createElement('textarea');
+    textarea.value = jsonData;
+    textarea.style.cssText = `
+      width: 100%;
+      height: 300px;
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 5px;
+      padding: 10px;
+      font-family: monospace;
+      font-size: 12px;
+      resize: vertical;
+    `;
+    textarea.readOnly = true;
+    textarea.select();
+    
+    const buttonContainer = document.createElement('div');
+    buttonContainer.style.cssText = 'margin-top: 15px; text-align: right;';
+    
+    const copyButton = document.createElement('button');
+    copyButton.textContent = 'Copy to Clipboard';
+    copyButton.style.cssText = `
+      background: #4fc3f7;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-right: 10px;
+    `;
+    
+    copyButton.addEventListener('click', () => {
+      textarea.select();
+      document.execCommand('copy');
+      copyButton.textContent = 'Copied!';
+      setTimeout(() => {
+        copyButton.textContent = 'Copy to Clipboard';
+      }, 2000);
+    });
+    
+    const closeButton = document.createElement('button');
+    closeButton.textContent = 'Close';
+    closeButton.style.cssText = `
+      background: #666;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 5px;
+      cursor: pointer;
+    `;
+    
+    closeButton.addEventListener('click', () => {
+      document.body.removeChild(modal);
+    });
+    
+    buttonContainer.appendChild(copyButton);
+    buttonContainer.appendChild(closeButton);
+    
+    content.appendChild(title);
+    content.appendChild(instructions);
+    content.appendChild(textarea);
+    content.appendChild(buttonContainer);
+    modal.appendChild(content);
+    
+    // Close modal when clicking outside
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) {
+        document.body.removeChild(modal);
+      }
+    });
+    
+    document.body.appendChild(modal);
+    
+    console.log(`Preset "${name}" JSON generated. Save to presets folder and refresh page.`);
+  }
+
+  private loadPresetFromFile(file: File): void {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const preset: PresetData = JSON.parse(e.target?.result as string);
+        this.applyPreset(preset);
+        this.updateControlPanel();
+        console.log(`Preset "${preset.name}" loaded successfully`);
+      } catch (error) {
+        console.error('Error loading preset:', error);
+        alert('Error loading preset file. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  private updateControlPanel(): void {
+    // This method will update all control panel values after loading a preset
+    const panel = this.controlPanel.element;
+    const controls = this.controlPanel.controls;
+    
+    // Update all slider values
+    if (controls.nodeCount) controls.nodeCount.value = this.nodeCount.toString();
+    if (controls.nodeSpeed) controls.nodeSpeed.value = this.nodeSpeed.toString();
+    if (controls.activitySpeed) controls.activitySpeed.value = this.activitySpeed.toString();
+    if (controls.connectionOpacity) controls.connectionOpacity.value = this.connectionOpacity.toString();
+    if (controls.mouseInfluenceRadius) controls.mouseInfluenceRadius.value = this.mouseInfluenceRadius.toString();
+    if (controls.particleCount) controls.particleCount.value = this.particleCount.toString();
+    if (controls.particleSpeed) controls.particleSpeed.value = this.particleSpeed.toString();
+    if (controls.particleSize) controls.particleSize.value = this.particleSize.toString();
+    if (controls.rippleIntensity) controls.rippleIntensity.value = this.rippleIntensity.toString();
+    if (controls.rippleDuration) controls.rippleDuration.value = this.rippleDuration.toString();
+    if (controls.rippleSize) controls.rippleSize.value = this.rippleSize.toString();
+    if (controls.wallRestitution) controls.wallRestitution.value = this.wallRestitution.toString();
+    if (controls.wallFriction) controls.wallFriction.value = this.wallFriction.toString();
+    
+    // Update color pickers
+    const colorPickers = panel.querySelectorAll('input[type="color"]');
+    colorPickers.forEach((picker, index) => {
+      const colors = [this.nodeColor, this.connectionColor, this.particleColor, this.rippleColor, this.backgroundColor];
+      if (index < colors.length) {
+        (picker as HTMLInputElement).value = colors[index];
+      }
+    });
+    
+    // Update checkboxes
+    const checkboxes = panel.querySelectorAll('input[type="checkbox"]');
+    checkboxes.forEach((checkbox, index) => {
+      const values = [this.showAllConnections, this.showParticles, this.showRipples];
+      if (index < values.length) {
+        (checkbox as HTMLInputElement).checked = values[index];
+      }
+    });
+    
+    // Update value displays
+    panel.querySelectorAll('span').forEach((span, index) => {
+      const values = [this.nodeCount, this.nodeSpeed, this.activitySpeed, this.connectionOpacity, this.spaceSize, this.mouseInfluenceRadius, this.particleCount, this.particleSpeed, this.particleSize, this.rippleIntensity, this.rippleDuration, this.rippleSize, this.wallRestitution, this.wallFriction];
+      if (index < values.length) {
+        span.textContent = values[index].toFixed(2);
+      }
+    });
+  }
+
+  private createPresetPanel(): void {
+    const presetPanel = document.createElement('div');
+    presetPanel.style.cssText = `
+      position: fixed;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.9);
+      color: white;
+      padding: 15px;
+      border-radius: 10px;
+      font-family: Arial, sans-serif;
+      font-size: 14px;
+      z-index: 1000;
+      min-width: 200px;
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    `;
+    
+    const title = document.createElement('h3');
+    title.textContent = 'Presets';
+    title.style.cssText = 'margin: 0 0 15px 0; color: #4fc3f7;';
+    presetPanel.appendChild(title);
+    
+    // Preset dropdown
+    const dropdownContainer = document.createElement('div');
+    dropdownContainer.style.cssText = 'margin-bottom: 10px;';
+    
+    const dropdown = document.createElement('select');
+    dropdown.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 3px;
+      font-size: 12px;
+      cursor: pointer;
+    `;
+    
+    // Add preset options
+    const defaultPresets = [
+      { name: 'Default', file: 'Default.json' },
+      { name: 'Calm Ocean', file: 'Calm Ocean.json' },
+      { name: 'Electric Storm', file: 'Electric Storm.json' }
+    ];
+    
+    defaultPresets.forEach(preset => {
+      const option = document.createElement('option');
+      option.value = preset.file;
+      option.textContent = preset.name;
+      dropdown.appendChild(option);
+    });
+    
+    dropdown.addEventListener('change', () => {
+      if (dropdown.value) {
+        this.loadPresetFromPath(`./presets/${dropdown.value}`);
+      }
+    });
+    
+    dropdownContainer.appendChild(dropdown);
+    presetPanel.appendChild(dropdownContainer);
+    
+    // Save preset section
+    const saveContainer = document.createElement('div');
+    saveContainer.style.cssText = 'margin-bottom: 10px;';
+    
+    const saveInput = document.createElement('input');
+    saveInput.type = 'text';
+    saveInput.placeholder = 'Preset name...';
+    saveInput.style.cssText = `
+      width: 100%;
+      padding: 5px;
+      background: #333;
+      color: white;
+      border: 1px solid #555;
+      border-radius: 3px;
+      font-size: 12px;
+      margin-bottom: 5px;
+    `;
+    
+    const saveButton = document.createElement('button');
+    saveButton.textContent = 'Save Preset';
+    saveButton.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      background: #4fc3f7;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+    `;
+    
+    saveButton.addEventListener('click', () => {
+      const name = saveInput.value.trim();
+      if (name) {
+        this.savePreset(name);
+        saveInput.value = '';
+      } else {
+        alert('Please enter a preset name');
+      }
+    });
+    
+    saveContainer.appendChild(saveInput);
+    saveContainer.appendChild(saveButton);
+    presetPanel.appendChild(saveContainer);
+    
+    // Load custom preset section
+    const loadContainer = document.createElement('div');
+    
+    const loadInput = document.createElement('input');
+    loadInput.type = 'file';
+    loadInput.accept = '.json';
+    loadInput.style.cssText = 'display: none;';
+    
+    const loadButton = document.createElement('button');
+    loadButton.textContent = 'Load Custom';
+    loadButton.style.cssText = `
+      width: 100%;
+      padding: 8px;
+      background: #666;
+      color: white;
+      border: none;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 12px;
+    `;
+    
+    loadButton.addEventListener('click', () => {
+      loadInput.click();
+    });
+    
+    loadInput.addEventListener('change', (e) => {
+      const file = (e.target as HTMLInputElement).files?.[0];
+      if (file) {
+        this.loadPresetFromFile(file);
+      }
+    });
+    
+    loadContainer.appendChild(loadInput);
+    loadContainer.appendChild(loadButton);
+    presetPanel.appendChild(loadContainer);
+    
+    document.body.appendChild(presetPanel);
+  }
+
+  private async loadPresetFromPath(path: string): Promise<void> {
+    try {
+      const response = await fetch(path);
+      if (!response.ok) {
+        throw new Error(`Failed to load preset: ${response.statusText}`);
+      }
+      const preset: PresetData = await response.json();
+      this.applyPreset(preset);
+      this.updateControlPanel();
+      console.log(`Preset "${preset.name}" loaded successfully`);
+    } catch (error) {
+      console.error('Error loading preset:', error);
+      alert('Error loading preset. Please check if the file exists.');
+    }
   }
   
   private recreateNodes(): void {
