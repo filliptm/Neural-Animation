@@ -1112,7 +1112,8 @@ class NeuralNetworkAnimation {
             { name: 'Calm Ocean', file: 'Calm Ocean.json' },
             { name: 'Electric Storm', file: 'Electric Storm.json' },
             { name: 'Dark Magic', file: 'Dark Magic.json' },
-            { name: 'Bright Night', file: 'Bright Night.json' }
+            { name: 'Bright Night', file: 'Bright Night.json' },
+            { name: 'Green', file: 'Green.json' }
         ];
         // Load presets dynamically
         this.loadAvailablePresets(dropdown, defaultPresets);
@@ -1125,7 +1126,8 @@ class NeuralNetworkAnimation {
                     { name: 'Calm Ocean', file: 'Calm Ocean.json' },
                     { name: 'Electric Storm', file: 'Electric Storm.json' },
                     { name: 'Dark Magic', file: 'Dark Magic.json' },
-                    { name: 'Bright Night', file: 'Bright Night.json' }
+                    { name: 'Bright Night', file: 'Bright Night.json' },
+                    { name: 'Green', file: 'Green.json' }
                 ];
                 this.loadAvailablePresets(dropdown, defaultPresets);
                 dropdown.value = ''; // Reset selection
@@ -1312,53 +1314,28 @@ class NeuralNetworkAnimation {
     }
     async loadAvailablePresets(dropdown, knownPresets) {
         // First, add all known presets
+        console.log('Loading known presets:', knownPresets);
         for (const preset of knownPresets) {
             try {
+                console.log(`Checking preset: ${preset.name} (${preset.file})`);
                 const response = await fetch(`./presets/${preset.file}`, { method: 'HEAD' });
+                console.log(`Response for ${preset.file}:`, response.status, response.ok);
                 if (response.ok) {
                     const option = document.createElement('option');
                     option.value = preset.file;
                     option.textContent = preset.name;
                     dropdown.appendChild(option);
+                    console.log(`Added preset to dropdown: ${preset.name}`);
+                }
+                else {
+                    console.log(`Preset ${preset.file} returned status ${response.status}`);
                 }
             }
             catch (error) {
-                console.log(`Preset ${preset.file} not found, skipping`);
+                console.log(`Preset ${preset.file} not found, skipping:`, error);
             }
         }
-        // Try to find additional presets by checking common naming patterns
-        const additionalPresets = [
-            'Neon Glow.json',
-            'Minimal.json',
-            'Chaos.json',
-            'Zen.json',
-            'Matrix.json',
-            'Sunset.json',
-            'Arctic.json',
-            'Forest.json',
-            'Space.json',
-            'Fire.json'
-        ];
-        for (const filename of additionalPresets) {
-            // Skip if already in known presets
-            if (knownPresets.some(p => p.file === filename))
-                continue;
-            try {
-                const response = await fetch(`./presets/${filename}`, { method: 'HEAD' });
-                if (response.ok) {
-                    // Get preset name from filename
-                    const name = filename.replace('.json', '');
-                    const option = document.createElement('option');
-                    option.value = filename;
-                    option.textContent = name;
-                    dropdown.appendChild(option);
-                    console.log(`Found additional preset: ${name}`);
-                }
-            }
-            catch (error) {
-                // Silently skip missing files
-            }
-        }
+        // Only load known presets - no additional preset discovery
         // Add a refresh option to manually check for new presets
         const refreshOption = document.createElement('option');
         refreshOption.value = 'REFRESH';
