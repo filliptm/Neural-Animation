@@ -22,6 +22,7 @@ class NeuralNetworkAnimation {
         this.particleCount = 8;
         this.particleSpeed = 1.0;
         this.particleSize = 0.2;
+        this.particleColor = '#ffff00';
         this.showParticles = true;
         // Time tracking
         this.clock = new THREE.Clock();
@@ -211,15 +212,18 @@ class NeuralNetworkAnimation {
         const content = document.createElement('div');
         content.style.cssText = 'transition: max-height 0.3s ease, opacity 0.3s ease; overflow: hidden;';
         const controls = {};
-        // Helper function to create slider controls
+        // Helper function to create compact slider controls
         const createSlider = (label, min, max, step, value, callback) => {
             const container = document.createElement('div');
-            container.style.cssText = 'margin-bottom: 15px;';
+            container.style.cssText = 'margin-bottom: 8px;';
+            const labelContainer = document.createElement('div');
+            labelContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;';
             const labelEl = document.createElement('label');
             labelEl.textContent = label;
-            labelEl.style.cssText = 'display: block; margin-bottom: 5px; color: #e0e0e0;';
-            const sliderContainer = document.createElement('div');
-            sliderContainer.style.cssText = 'display: flex; align-items: center; gap: 10px;';
+            labelEl.style.cssText = 'color: #e0e0e0; font-size: 12px;';
+            const valueDisplay = document.createElement('span');
+            valueDisplay.textContent = value.toFixed(2);
+            valueDisplay.style.cssText = 'color: #4fc3f7; font-size: 12px; min-width: 35px; text-align: right;';
             const slider = document.createElement('input');
             slider.type = 'range';
             slider.min = min.toString();
@@ -227,40 +231,58 @@ class NeuralNetworkAnimation {
             slider.step = step.toString();
             slider.value = value.toString();
             slider.style.cssText = `
-        flex: 1;
-        height: 6px;
+        width: 100%;
+        height: 4px;
         background: #333;
         outline: none;
-        border-radius: 3px;
+        border-radius: 2px;
         -webkit-appearance: none;
       `;
-            const valueDisplay = document.createElement('span');
-            valueDisplay.textContent = value.toFixed(2);
-            valueDisplay.style.cssText = 'min-width: 50px; text-align: right; color: #4fc3f7;';
             slider.addEventListener('input', () => {
                 const val = parseFloat(slider.value);
                 valueDisplay.textContent = val.toFixed(2);
                 callback(val);
             });
-            sliderContainer.appendChild(slider);
-            sliderContainer.appendChild(valueDisplay);
-            container.appendChild(labelEl);
-            container.appendChild(sliderContainer);
+            labelContainer.appendChild(labelEl);
+            labelContainer.appendChild(valueDisplay);
+            container.appendChild(labelContainer);
+            container.appendChild(slider);
             content.appendChild(container);
             return slider;
         };
-        // Create all the sliders
-        controls.nodeCount = createSlider('Node Count', 5, 25, 1, this.nodeCount, (val) => {
+        // Helper function to create compact color picker
+        const createColorPicker = (label, value, callback) => {
+            const container = document.createElement('div');
+            container.style.cssText = 'margin-bottom: 8px;';
+            const labelContainer = document.createElement('div');
+            labelContainer.style.cssText = 'display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px;';
+            const labelEl = document.createElement('label');
+            labelEl.textContent = label;
+            labelEl.style.cssText = 'color: #e0e0e0; font-size: 12px;';
+            const colorPicker = document.createElement('input');
+            colorPicker.type = 'color';
+            colorPicker.value = value;
+            colorPicker.style.cssText = 'width: 35px; height: 20px; border: none; border-radius: 3px; cursor: pointer;';
+            colorPicker.addEventListener('change', () => {
+                callback(colorPicker.value);
+            });
+            labelContainer.appendChild(labelEl);
+            labelContainer.appendChild(colorPicker);
+            container.appendChild(labelContainer);
+            content.appendChild(container);
+            return colorPicker;
+        };
+        // Create all the controls in a more compact layout
+        controls.nodeCount = createSlider('Nodes', 5, 25, 1, this.nodeCount, (val) => {
             this.nodeCount = Math.floor(val);
             this.recreateNodes();
         });
         controls.nodeSpeed = createSlider('Node Speed', 0, 2, 0.1, this.nodeSpeed, (val) => this.nodeSpeed = val);
-        controls.activitySpeed = createSlider('Activity Speed', 0.5, 5, 0.1, this.activitySpeed, (val) => this.activitySpeed = val);
-        controls.connectionOpacity = createSlider('Connection Opacity', 0, 1, 0.05, this.connectionOpacity, (val) => this.connectionOpacity = val);
-        controls.spaceSize = createSlider('Space Size', 10, 30, 1, this.spaceSize, (val) => this.spaceSize = val);
-        controls.mouseInfluenceRadius = createSlider('Mouse Radius', 2, 15, 0.5, this.mouseInfluenceRadius, (val) => this.mouseInfluenceRadius = val);
+        controls.activitySpeed = createSlider('Activity', 0.5, 5, 0.1, this.activitySpeed, (val) => this.activitySpeed = val);
+        controls.connectionOpacity = createSlider('Connections', 0, 1, 0.05, this.connectionOpacity, (val) => this.connectionOpacity = val);
+        controls.mouseInfluenceRadius = createSlider('Mouse Range', 2, 15, 0.5, this.mouseInfluenceRadius, (val) => this.mouseInfluenceRadius = val);
         // Particle controls
-        controls.particleCount = createSlider('Particle Count', 0, 20, 1, this.particleCount, (val) => {
+        controls.particleCount = createSlider('Particles', 0, 20, 1, this.particleCount, (val) => {
             this.particleCount = Math.floor(val);
             this.updateParticleCount();
         });
@@ -268,6 +290,23 @@ class NeuralNetworkAnimation {
         controls.particleSize = createSlider('Particle Size', 0.05, 0.5, 0.05, this.particleSize, (val) => {
             this.particleSize = val;
             this.updateParticleSize();
+        });
+        // Color controls
+        const nodeColorPicker = createColorPicker('Node Color', this.nodeColor, (val) => {
+            this.nodeColor = val;
+            this.updateNodeColors();
+        });
+        const connectionColorPicker = createColorPicker('Connection Color', this.connectionColor, (val) => {
+            this.connectionColor = val;
+            this.updateConnectionColors();
+        });
+        const particleColorPicker = createColorPicker('Particle Color', this.particleColor, (val) => {
+            this.particleColor = val;
+            this.updateParticleColors();
+        });
+        const backgroundColorPicker = createColorPicker('Background', this.backgroundColor, (val) => {
+            this.backgroundColor = val;
+            this.scene.background = new THREE.Color(this.backgroundColor);
         });
         // Toggle for showing all connections
         const toggleContainer = document.createElement('div');
@@ -303,57 +342,6 @@ class NeuralNetworkAnimation {
         particleToggleContainer.appendChild(particleToggleLabel);
         particleToggleContainer.appendChild(particleToggle);
         content.appendChild(particleToggleContainer);
-        // Background color picker
-        const colorContainer = document.createElement('div');
-        colorContainer.style.cssText = 'margin-bottom: 15px;';
-        const colorLabel = document.createElement('label');
-        colorLabel.textContent = 'Background Color';
-        colorLabel.style.cssText = 'display: block; margin-bottom: 5px; color: #e0e0e0;';
-        const colorPicker = document.createElement('input');
-        colorPicker.type = 'color';
-        colorPicker.value = this.backgroundColor;
-        colorPicker.style.cssText = 'width: 100%; height: 40px; border: none; border-radius: 5px; cursor: pointer;';
-        colorPicker.addEventListener('change', () => {
-            this.backgroundColor = colorPicker.value;
-            this.scene.background = new THREE.Color(this.backgroundColor);
-        });
-        colorContainer.appendChild(colorLabel);
-        colorContainer.appendChild(colorPicker);
-        content.appendChild(colorContainer);
-        // Node color picker
-        const nodeColorContainer = document.createElement('div');
-        nodeColorContainer.style.cssText = 'margin-bottom: 15px;';
-        const nodeColorLabel = document.createElement('label');
-        nodeColorLabel.textContent = 'Node Color';
-        nodeColorLabel.style.cssText = 'display: block; margin-bottom: 5px; color: #e0e0e0;';
-        const nodeColorPicker = document.createElement('input');
-        nodeColorPicker.type = 'color';
-        nodeColorPicker.value = this.nodeColor;
-        nodeColorPicker.style.cssText = 'width: 100%; height: 40px; border: none; border-radius: 5px; cursor: pointer;';
-        nodeColorPicker.addEventListener('change', () => {
-            this.nodeColor = nodeColorPicker.value;
-            this.updateNodeColors();
-        });
-        nodeColorContainer.appendChild(nodeColorLabel);
-        nodeColorContainer.appendChild(nodeColorPicker);
-        content.appendChild(nodeColorContainer);
-        // Connection color picker
-        const connectionColorContainer = document.createElement('div');
-        connectionColorContainer.style.cssText = 'margin-bottom: 15px;';
-        const connectionColorLabel = document.createElement('label');
-        connectionColorLabel.textContent = 'Connection Color';
-        connectionColorLabel.style.cssText = 'display: block; margin-bottom: 5px; color: #e0e0e0;';
-        const connectionColorPicker = document.createElement('input');
-        connectionColorPicker.type = 'color';
-        connectionColorPicker.value = this.connectionColor;
-        connectionColorPicker.style.cssText = 'width: 100%; height: 40px; border: none; border-radius: 5px; cursor: pointer;';
-        connectionColorPicker.addEventListener('change', () => {
-            this.connectionColor = connectionColorPicker.value;
-            this.updateConnectionColors();
-        });
-        connectionColorContainer.appendChild(connectionColorLabel);
-        connectionColorContainer.appendChild(connectionColorPicker);
-        content.appendChild(connectionColorContainer);
         // Reset button
         const resetButton = document.createElement('button');
         resetButton.textContent = 'Reset to Defaults';
@@ -382,6 +370,7 @@ class NeuralNetworkAnimation {
             this.particleCount = 8;
             this.particleSpeed = 1.0;
             this.particleSize = 0.2;
+            this.particleColor = '#ffff00';
             this.showParticles = true;
             // Update all controls
             controls.nodeCount.value = this.nodeCount.toString();
@@ -395,9 +384,10 @@ class NeuralNetworkAnimation {
             controls.particleSize.value = this.particleSize.toString();
             toggle.checked = this.showAllConnections;
             particleToggle.checked = this.showParticles;
-            colorPicker.value = this.backgroundColor;
+            backgroundColorPicker.value = this.backgroundColor;
             nodeColorPicker.value = this.nodeColor;
             connectionColorPicker.value = this.connectionColor;
+            particleColorPicker.value = this.particleColor;
             // Update displays
             panel.querySelectorAll('span').forEach((span, index) => {
                 const values = [this.nodeCount, this.nodeSpeed, this.activitySpeed, this.connectionOpacity, this.spaceSize, this.mouseInfluenceRadius, this.particleCount, this.particleSpeed, this.particleSize];
@@ -408,6 +398,7 @@ class NeuralNetworkAnimation {
             this.scene.background = new THREE.Color(this.backgroundColor);
             this.updateNodeColors();
             this.updateConnectionColors();
+            this.updateParticleColors();
             this.updateParticleVisibility();
             this.clearAllParticles();
             this.recreateNodes();
@@ -564,7 +555,7 @@ class NeuralNetworkAnimation {
     createParticle(startNode, endNode) {
         const geometry = new THREE.SphereGeometry(this.particleSize, 8, 6);
         const material = new THREE.MeshBasicMaterial({
-            color: new THREE.Color(this.connectionColor).multiplyScalar(1.5), // Brighter particles
+            color: new THREE.Color(this.particleColor),
             transparent: true,
             opacity: 1.0
         });
@@ -634,6 +625,12 @@ class NeuralNetworkAnimation {
         // Update size of existing particles
         this.particles.forEach(particle => {
             particle.mesh.scale.setScalar(this.particleSize / 0.2); // 0.2 is the base size
+        });
+    }
+    updateParticleColors() {
+        const newColor = new THREE.Color(this.particleColor);
+        this.particles.forEach(particle => {
+            particle.mesh.material.color.copy(newColor);
         });
     }
     updateParticleVisibility() {
