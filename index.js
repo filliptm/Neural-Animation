@@ -43,6 +43,7 @@ class NeuralNetworkAnimation {
         this.createControlPanel();
         this.createNodes();
         this.setupEventListeners();
+        this.loadDefaultPreset();
         this.animate();
     }
     init() {
@@ -1098,20 +1099,29 @@ class NeuralNetworkAnimation {
       font-size: 12px;
       cursor: pointer;
     `;
-        // Add preset options
+        // Add preset options - try to load all known presets
         const defaultPresets = [
             { name: 'Default', file: 'Default.json' },
             { name: 'Calm Ocean', file: 'Calm Ocean.json' },
-            { name: 'Electric Storm', file: 'Electric Storm.json' }
+            { name: 'Electric Storm', file: 'Electric Storm.json' },
+            { name: 'Dark Magic', file: 'Dark Magic.json' }
         ];
-        defaultPresets.forEach(preset => {
-            const option = document.createElement('option');
-            option.value = preset.file;
-            option.textContent = preset.name;
-            dropdown.appendChild(option);
-        });
+        // Load presets dynamically
+        this.loadAvailablePresets(dropdown, defaultPresets);
         dropdown.addEventListener('change', () => {
-            if (dropdown.value) {
+            if (dropdown.value === 'REFRESH') {
+                // Clear dropdown and reload presets
+                dropdown.innerHTML = '';
+                const defaultPresets = [
+                    { name: 'Default', file: 'Default.json' },
+                    { name: 'Calm Ocean', file: 'Calm Ocean.json' },
+                    { name: 'Electric Storm', file: 'Electric Storm.json' },
+                    { name: 'Dark Magic', file: 'Dark Magic.json' }
+                ];
+                this.loadAvailablePresets(dropdown, defaultPresets);
+                dropdown.value = ''; // Reset selection
+            }
+            else if (dropdown.value) {
                 this.loadPresetFromPath(`./presets/${dropdown.value}`);
             }
         });
@@ -1205,6 +1215,71 @@ class NeuralNetworkAnimation {
             console.error('Error loading preset:', error);
             alert('Error loading preset. Please check if the file exists.');
         }
+    }
+    async loadDefaultPreset() {
+        try {
+            await this.loadPresetFromPath('./presets/Default.json');
+        }
+        catch (error) {
+            console.log('Default preset not found, using built-in defaults');
+            // If Default.json doesn't exist, the current hardcoded values will be used
+        }
+    }
+    async loadAvailablePresets(dropdown, knownPresets) {
+        // First, add all known presets
+        for (const preset of knownPresets) {
+            try {
+                const response = await fetch(`./presets/${preset.file}`, { method: 'HEAD' });
+                if (response.ok) {
+                    const option = document.createElement('option');
+                    option.value = preset.file;
+                    option.textContent = preset.name;
+                    dropdown.appendChild(option);
+                }
+            }
+            catch (error) {
+                console.log(`Preset ${preset.file} not found, skipping`);
+            }
+        }
+        // Try to find additional presets by checking common naming patterns
+        const additionalPresets = [
+            'Neon Glow.json',
+            'Minimal.json',
+            'Chaos.json',
+            'Zen.json',
+            'Matrix.json',
+            'Sunset.json',
+            'Arctic.json',
+            'Forest.json',
+            'Space.json',
+            'Fire.json'
+        ];
+        for (const filename of additionalPresets) {
+            // Skip if already in known presets
+            if (knownPresets.some(p => p.file === filename))
+                continue;
+            try {
+                const response = await fetch(`./presets/${filename}`, { method: 'HEAD' });
+                if (response.ok) {
+                    // Get preset name from filename
+                    const name = filename.replace('.json', '');
+                    const option = document.createElement('option');
+                    option.value = filename;
+                    option.textContent = name;
+                    dropdown.appendChild(option);
+                    console.log(`Found additional preset: ${name}`);
+                }
+            }
+            catch (error) {
+                // Silently skip missing files
+            }
+        }
+        // Add a refresh option to manually check for new presets
+        const refreshOption = document.createElement('option');
+        refreshOption.value = 'REFRESH';
+        refreshOption.textContent = '🔄 Refresh Presets';
+        refreshOption.style.fontStyle = 'italic';
+        dropdown.appendChild(refreshOption);
     }
     recreateNodes() {
         // Clear existing nodes
