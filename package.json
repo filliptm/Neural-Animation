@@ -1,7 +1,7 @@
 {
-  "name": "fluttering-tiles-animation",
+  "name": "neural-animation",
   "version": "1.0.0",
-  "description": "Three.js fluttering scale tiles animation",
+  "description": "A stunning 3D neural network visualization with animated particles, built with Three.js and TypeScript",
   "main": "index.js",
   "type": "module",
   "scripts": {

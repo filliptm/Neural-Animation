@@ -8,6 +8,8 @@ class NeuralNetworkAnimation {
         this.boxEnvironment = new THREE.Group();
         this.particles = [];
         this.particleGroup = new THREE.Group();
+        this.ripples = [];
+        this.rippleGroup = new THREE.Group();
         // Animation parameters
         this.nodeCount = 12;
         this.connectionOpacity = 0.3;
@@ -24,6 +26,11 @@ class NeuralNetworkAnimation {
         this.particleSize = 0.2;
         this.particleColor = '#ffff00';
         this.showParticles = true;
+        this.rippleIntensity = 0.8;
+        this.rippleDuration = 2.0;
+        this.rippleSize = 1.0;
+        this.rippleColor = '#ffffff';
+        this.showRipples = true;
         // Time tracking
         this.clock = new THREE.Clock();
         this.init();
@@ -54,6 +61,8 @@ class NeuralNetworkAnimation {
         this.scene.add(this.connectionLines);
         // Add particle group
         this.scene.add(this.particleGroup);
+        // Add ripple group
+        this.scene.add(this.rippleGroup);
         // Add box environment group
         this.scene.add(this.boxEnvironment);
         // Create the box environment
@@ -291,6 +300,10 @@ class NeuralNetworkAnimation {
             this.particleSize = val;
             this.updateParticleSize();
         });
+        // Ripple controls
+        controls.rippleIntensity = createSlider('Ripple Intensity', 0, 2, 0.1, this.rippleIntensity, (val) => this.rippleIntensity = val);
+        controls.rippleDuration = createSlider('Ripple Duration', 0.5, 5, 0.1, this.rippleDuration, (val) => this.rippleDuration = val);
+        controls.rippleSize = createSlider('Ripple Size', 0.2, 3, 0.1, this.rippleSize, (val) => this.rippleSize = val);
         // Color controls
         const nodeColorPicker = createColorPicker('Node Color', this.nodeColor, (val) => {
             this.nodeColor = val;
@@ -303,6 +316,10 @@ class NeuralNetworkAnimation {
         const particleColorPicker = createColorPicker('Particle Color', this.particleColor, (val) => {
             this.particleColor = val;
             this.updateParticleColors();
+        });
+        const rippleColorPicker = createColorPicker('Ripple Color', this.rippleColor, (val) => {
+            this.rippleColor = val;
+            this.updateRippleColors();
         });
         const backgroundColorPicker = createColorPicker('Background', this.backgroundColor, (val) => {
             this.backgroundColor = val;
@@ -342,6 +359,23 @@ class NeuralNetworkAnimation {
         particleToggleContainer.appendChild(particleToggleLabel);
         particleToggleContainer.appendChild(particleToggle);
         content.appendChild(particleToggleContainer);
+        // Toggle for showing ripples
+        const rippleToggleContainer = document.createElement('div');
+        rippleToggleContainer.style.cssText = 'margin-bottom: 15px;';
+        const rippleToggleLabel = document.createElement('label');
+        rippleToggleLabel.textContent = 'Show Ripples';
+        rippleToggleLabel.style.cssText = 'display: block; margin-bottom: 5px; color: #e0e0e0;';
+        const rippleToggle = document.createElement('input');
+        rippleToggle.type = 'checkbox';
+        rippleToggle.checked = this.showRipples;
+        rippleToggle.style.cssText = 'transform: scale(1.5); margin-right: 10px;';
+        rippleToggle.addEventListener('change', () => {
+            this.showRipples = rippleToggle.checked;
+            this.updateRippleVisibility();
+        });
+        rippleToggleContainer.appendChild(rippleToggleLabel);
+        rippleToggleContainer.appendChild(rippleToggle);
+        content.appendChild(rippleToggleContainer);
         // Reset button
         const resetButton = document.createElement('button');
         resetButton.textContent = 'Reset to Defaults';
@@ -372,6 +406,11 @@ class NeuralNetworkAnimation {
             this.particleSize = 0.2;
             this.particleColor = '#ffff00';
             this.showParticles = true;
+            this.rippleIntensity = 0.8;
+            this.rippleDuration = 2.0;
+            this.rippleSize = 1.0;
+            this.rippleColor = '#ffffff';
+            this.showRipples = true;
             // Update all controls
             controls.nodeCount.value = this.nodeCount.toString();
             controls.nodeSpeed.value = this.nodeSpeed.toString();
@@ -382,15 +421,20 @@ class NeuralNetworkAnimation {
             controls.particleCount.value = this.particleCount.toString();
             controls.particleSpeed.value = this.particleSpeed.toString();
             controls.particleSize.value = this.particleSize.toString();
+            controls.rippleIntensity.value = this.rippleIntensity.toString();
+            controls.rippleDuration.value = this.rippleDuration.toString();
+            controls.rippleSize.value = this.rippleSize.toString();
             toggle.checked = this.showAllConnections;
             particleToggle.checked = this.showParticles;
+            rippleToggle.checked = this.showRipples;
             backgroundColorPicker.value = this.backgroundColor;
             nodeColorPicker.value = this.nodeColor;
             connectionColorPicker.value = this.connectionColor;
             particleColorPicker.value = this.particleColor;
+            rippleColorPicker.value = this.rippleColor;
             // Update displays
             panel.querySelectorAll('span').forEach((span, index) => {
-                const values = [this.nodeCount, this.nodeSpeed, this.activitySpeed, this.connectionOpacity, this.spaceSize, this.mouseInfluenceRadius, this.particleCount, this.particleSpeed, this.particleSize];
+                const values = [this.nodeCount, this.nodeSpeed, this.activitySpeed, this.connectionOpacity, this.spaceSize, this.mouseInfluenceRadius, this.particleCount, this.particleSpeed, this.particleSize, this.rippleIntensity, this.rippleDuration, this.rippleSize];
                 if (index < values.length) {
                     span.textContent = values[index].toFixed(2);
                 }
@@ -400,7 +444,10 @@ class NeuralNetworkAnimation {
             this.updateConnectionColors();
             this.updateParticleColors();
             this.updateParticleVisibility();
+            this.updateRippleColors();
+            this.updateRippleVisibility();
             this.clearAllParticles();
+            this.clearAllRipples();
             this.recreateNodes();
         });
         content.appendChild(resetButton);
@@ -552,6 +599,69 @@ class NeuralNetworkAnimation {
             line.material.color.copy(newColor);
         });
     }
+    createRipple(position, normal, wallType) {
+        const rippleRadius = 4.0 * this.rippleIntensity * this.rippleSize;
+        // Create a more blurred, soft ripple using a circle with gradient
+        const geometry = new THREE.CircleGeometry(0.1, 32);
+        // Create a custom shader material for a soft, blurred glow effect
+        const material = new THREE.ShaderMaterial({
+            uniforms: {
+                color: { value: new THREE.Color(this.rippleColor) },
+                opacity: { value: 0.6 },
+                radius: { value: 0.1 }
+            },
+            vertexShader: `
+        varying vec2 vUv;
+        void main() {
+          vUv = uv;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+            fragmentShader: `
+        uniform vec3 color;
+        uniform float opacity;
+        uniform float radius;
+        varying vec2 vUv;
+        
+        void main() {
+          vec2 center = vec2(0.5, 0.5);
+          float dist = distance(vUv, center);
+          
+          // Create a soft falloff with multiple layers for blur effect
+          float alpha1 = 1.0 - smoothstep(0.0, 0.3, dist);
+          float alpha2 = 1.0 - smoothstep(0.1, 0.5, dist);
+          float alpha3 = 1.0 - smoothstep(0.3, 0.8, dist);
+          
+          float finalAlpha = (alpha1 * 0.6 + alpha2 * 0.3 + alpha3 * 0.1) * opacity;
+          
+          gl_FragColor = vec4(color, finalAlpha);
+        }
+      `,
+            transparent: true,
+            side: THREE.DoubleSide,
+            blending: THREE.AdditiveBlending // Additive blending for glow effect
+        });
+        const mesh = new THREE.Mesh(geometry, material);
+        mesh.position.copy(position);
+        // Orient the ripple based on the wall normal
+        if (wallType === 'floor' || wallType === 'ceiling') {
+            mesh.rotation.x = wallType === 'floor' ? -Math.PI / 2 : Math.PI / 2;
+        }
+        else if (wallType === 'left' || wallType === 'right') {
+            mesh.rotation.y = wallType === 'left' ? Math.PI / 2 : -Math.PI / 2;
+        }
+        // back wall needs no rotation (default orientation)
+        this.rippleGroup.add(mesh);
+        return {
+            mesh,
+            position: position.clone(),
+            normal: normal.clone(),
+            age: 0,
+            maxAge: this.rippleDuration,
+            maxRadius: rippleRadius,
+            wallType
+        };
+    }
     createParticle(startNode, endNode) {
         const geometry = new THREE.SphereGeometry(this.particleSize, 8, 6);
         const material = new THREE.MeshBasicMaterial({
@@ -617,6 +727,32 @@ class NeuralNetworkAnimation {
             }
         }
     }
+    updateRipples() {
+        const deltaTime = 1 / 60; // Fixed 60 FPS delta time for consistent behavior
+        // Update existing ripples
+        for (let i = this.ripples.length - 1; i >= 0; i--) {
+            const ripple = this.ripples[i];
+            ripple.age += deltaTime;
+            // Remove ripples that have exceeded their lifespan
+            if (ripple.age >= ripple.maxAge) {
+                this.rippleGroup.remove(ripple.mesh);
+                ripple.mesh.geometry.dispose();
+                ripple.mesh.material.dispose();
+                this.ripples.splice(i, 1);
+                continue;
+            }
+            // Update ripple size and opacity
+            const progress = ripple.age / ripple.maxAge;
+            const currentScale = ripple.maxRadius * progress;
+            const opacity = 0.6 * (1 - progress * progress * progress); // Fade out with cubic curve for softer transition
+            // Scale the mesh to expand the ripple
+            ripple.mesh.scale.setScalar(currentScale);
+            // Update shader material opacity
+            const material = ripple.mesh.material;
+            material.uniforms.opacity.value = opacity;
+            material.uniforms.radius.value = currentScale;
+        }
+    }
     updateParticleCount() {
         // This method is called when particle count changes
         // The actual particle spawning is handled in updateParticles()
@@ -639,6 +775,28 @@ class NeuralNetworkAnimation {
             // Clear all particles when disabled
             this.clearAllParticles();
         }
+    }
+    updateRippleColors() {
+        const newColor = new THREE.Color(this.rippleColor);
+        this.ripples.forEach(ripple => {
+            const material = ripple.mesh.material;
+            material.uniforms.color.value.copy(newColor);
+        });
+    }
+    updateRippleVisibility() {
+        this.rippleGroup.visible = this.showRipples;
+        if (!this.showRipples) {
+            // Clear all ripples when disabled
+            this.clearAllRipples();
+        }
+    }
+    clearAllRipples() {
+        this.ripples.forEach(ripple => {
+            this.rippleGroup.remove(ripple.mesh);
+            ripple.mesh.geometry.dispose();
+            ripple.mesh.material.dispose();
+        });
+        this.ripples = [];
     }
     clearAllParticles() {
         this.particles.forEach(particle => {
@@ -702,30 +860,68 @@ class NeuralNetworkAnimation {
             const boundaryX = width * 0.5;
             const boundaryY = height * 0.5;
             const boundaryZ = depth * 0.4;
-            // Bounce off boundaries
+            // Bounce off boundaries and create ripples
             if (position.x > boundaryX) {
                 position.x = boundaryX;
-                velocity.x = -Math.abs(velocity.x);
+                if (velocity.x > 0) { // Only create ripple if actually hitting the wall
+                    velocity.x = -Math.abs(velocity.x);
+                    if (this.showRipples) {
+                        const ripplePos = new THREE.Vector3(boundaryX, position.y, position.z);
+                        const normal = new THREE.Vector3(-1, 0, 0);
+                        this.ripples.push(this.createRipple(ripplePos, normal, 'right'));
+                    }
+                }
             }
             else if (position.x < -boundaryX) {
                 position.x = -boundaryX;
-                velocity.x = Math.abs(velocity.x);
+                if (velocity.x < 0) { // Only create ripple if actually hitting the wall
+                    velocity.x = Math.abs(velocity.x);
+                    if (this.showRipples) {
+                        const ripplePos = new THREE.Vector3(-boundaryX, position.y, position.z);
+                        const normal = new THREE.Vector3(1, 0, 0);
+                        this.ripples.push(this.createRipple(ripplePos, normal, 'left'));
+                    }
+                }
             }
             if (position.y > boundaryY) {
                 position.y = boundaryY;
-                velocity.y = -Math.abs(velocity.y);
+                if (velocity.y > 0) { // Only create ripple if actually hitting the wall
+                    velocity.y = -Math.abs(velocity.y);
+                    if (this.showRipples) {
+                        const ripplePos = new THREE.Vector3(position.x, boundaryY, position.z);
+                        const normal = new THREE.Vector3(0, -1, 0);
+                        this.ripples.push(this.createRipple(ripplePos, normal, 'ceiling'));
+                    }
+                }
             }
             else if (position.y < -boundaryY) {
                 position.y = -boundaryY;
-                velocity.y = Math.abs(velocity.y);
+                if (velocity.y < 0) { // Only create ripple if actually hitting the wall
+                    velocity.y = Math.abs(velocity.y);
+                    if (this.showRipples) {
+                        const ripplePos = new THREE.Vector3(position.x, -boundaryY, position.z);
+                        const normal = new THREE.Vector3(0, 1, 0);
+                        this.ripples.push(this.createRipple(ripplePos, normal, 'floor'));
+                    }
+                }
             }
             if (position.z > boundaryZ) {
                 position.z = boundaryZ;
-                velocity.z = -Math.abs(velocity.z);
+                if (velocity.z > 0) { // Only create ripple if actually hitting the wall
+                    velocity.z = -Math.abs(velocity.z);
+                    // No ripple for front wall (camera side)
+                }
             }
             else if (position.z < -boundaryZ) {
                 position.z = -boundaryZ;
-                velocity.z = Math.abs(velocity.z);
+                if (velocity.z < 0) { // Only create ripple if actually hitting the wall
+                    velocity.z = Math.abs(velocity.z);
+                    if (this.showRipples) {
+                        const ripplePos = new THREE.Vector3(position.x, position.y, -boundaryZ);
+                        const normal = new THREE.Vector3(0, 0, 1);
+                        this.ripples.push(this.createRipple(ripplePos, normal, 'back'));
+                    }
+                }
             }
             // Mouse interaction
             const intersects = this.raycaster.intersectObject(mesh);
@@ -787,6 +983,7 @@ class NeuralNetworkAnimation {
         requestAnimationFrame(() => this.animate());
         this.updateNodes();
         this.updateParticles();
+        this.updateRipples();
         this.renderer.render(this.scene, this.camera);
     }
 }
